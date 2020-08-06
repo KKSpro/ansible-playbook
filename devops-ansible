@@ -1,0 +1,81 @@
+#prerequestie : docker must be installed on remote machine
+#               there remote machine should be in ssh with local local machine
+#				to run ansible playbook on local machine ansible must be there
+#               you may also copy the website folder for apache container
+#               you should have haproxy configuration(vary with conf.) file on local machine for copying it on remote one
+---
+- hosts: all
+  vars:
+          img: 
+               - httpd:latest
+               - haproxy:latest  
+  tasks:
+                  
+              - name: pull image
+                docker_image:
+                    name: "{{ item }}"
+                    source: pull
+                loop: "{{ img }}"
+              - name: copy my contain1
+                copy:
+                        src: ./index1.html
+                        dest: /home/roy/volume/index.html
+                notify: apache1
+              - name: copy my contain2
+                copy:
+                        src: ./index2.html
+                        dest: /home/roy/volume1/index.html
+                notify: apache2
+              - name: create containers
+                docker_container:
+                   name: haproxycon1
+                   image: haproxy:latest
+                   volumes:
+                           - /home/roy/ha/:/usr/local/etc/haproxy/
+                   state: stopped
+                   ports:
+                           - "80:80"
+                   command: sleep 1d
+                notify: pop
+                register: haproxycon1
+                ignore_errors: yes
+              - name: create apache1 container
+                docker_container:
+                    name:  con1
+                    image: httpd:latest
+                    state: started
+                    volumes:
+                            - /home/roy/volume:/usr/local/apache2/htdocs
+                    exposed_ports:
+                            - 80
+                register: con1
+                ignore_errors: yes
+              - name: create apache2
+                docker_container:
+                        name: con2
+                        image: httpd:latest
+                        state: started
+                        volumes:
+                                - /home/roy/volume1:/usr/local/apache2/htdocs
+                        exposed_ports:
+                                - 80
+                register: con2
+                ignore_errors: yes
+              - name: haproxyconf
+                template:
+                       src: ./haproxy.cfg
+                       dest: /home/roy/ha/haproxy.cfg
+                notify: pop
+  handlers:
+          - name: pop
+            docker_container:
+                    name: haproxycon1
+                    state: started
+          - name: apache1
+            docker_container:
+                    name: con1
+                    state: started
+          - name: apache2
+            docker_container:
+                    name: con2
+                    state: started
